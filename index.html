@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ChatGPT Clone</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      height: 100vh;
+      background-color: #212121;
+      color: #ececf1;
+      overflow: hidden;
+    }
+    /* Sidebar styling */
+    .sidebar {
+      width: 260px;
+      background-color: #171717;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+    .new-chat-btn {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      border: 1px solid #4d4d4d;
+      border-radius: 6px;
+      background: transparent;
+      color: #fff;
+      cursor: pointer;
+      font-size: 14px;
+      text-align: left;
+      transition: background 0.2s;
+    }
+    .new-chat-btn:hover {
+      background-color: #2a2b32;
+    }
+    .history-list {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .history-item {
+      padding: 12px;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: #c5c5d2;
+    }
+    .history-item:hover, .history-item.active {
+      background-color: #2a2b32;
+      color: #fff;
+    }
+    .api-box {
+      border-top: 1px solid #4d4d4d;
+      padding-top: 10px;
+    }
+    .api-box input {
+      width: 100%;
+      padding: 10px;
+      background-color: #2a2b32;
+      border: 1px solid #4d4d4d;
+      border-radius: 6px;
+      color: #fff;
+      font-size: 12px;
+    }
+    /* Main Content Area */
+    .main-chat {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background-color: #212121;
+      position: relative;
+    }
+    .chat-display {
+      flex: 1;
+      overflow-y: auto;
+      padding-bottom: 150px;
+    }
+    .message-row {
+      display: flex;
+      padding: 24px;
+      justify-content: center;
+      border-bottom: 1px solid rgba(0,0,0,0.1);
+    }
+    .message-row.user {
+      background-color: #212121;
+    }
+    .message-row.ai {
+      background-color: #2f2f2f;
+    }
+    .message-content {
+      max-width: 768px;
+      width: 100%;
+      display: flex;
+      gap: 20px;
+      font-size: 16px;
+      line-height: 1.5;
+    }
+    .avatar {
+      width: 30px;
+      height: 30px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+    .user .avatar { background-color: #543a3a; text-shadow: 0 0 1px #fff; }
+    .ai .avatar { background-color: #10a37f; color: white; }
+    .text {
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    /* Input Container Area */
+    .input-container {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: linear-gradient(transparent, #212121 30%);
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+    }
+    .input-box-wrapper {
+      max-width: 768px;
+      width: 100%;
+      position: relative;
+      background-color: #2f2f2f;
+      border-radius: 12px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.2);
+    }
+    .input-box-wrapper textarea {
+      width: 100%;
+      background: transparent;
+      border: none;
+      resize: none;
+      outline: none;
+      color: #fff;
+      padding: 16px 50px 16px 16px;
+      font-size: 16px;
+      font-family: inherit;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .send-btn {
+      position: absolute;
+      right: 12px;
+      bottom: 12px;
+      background: #10a37f;
+      color: white;
+      border: none;
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+    .send-btn:hover { background-color: #1a7f66; }
+    .send-btn:disabled { background-color: #404040; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+
+  <!-- Sidebar Component -->
+  <div class="sidebar">
+    <button class="new-chat-btn" onclick="createNewChat()">+ New chat</button>
+    <div class="history-list" id="historyList"></div>
+    <div class="api-box">
+      <input type="password" id="apiKey" placeholder="Set Gemini API Key" onchange="saveApiKey()">
+    </div>
+  </div>
+
+  <!-- Chat View Component -->
+  <div class="main-chat">
+    <div class="chat-display" id="chatDisplay"></div>
+    <div class="input-container">
+      <div class="input-box-wrapper">
+        <textarea id="userInput" rows="1" placeholder="Message ChatGPT..." onkeydown="handleKeyPress(event)"></textarea>
+        <button class="send-btn" id="sendBtn" onclick="sendMessage()">➔</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+        // App State Configuration
+    let conversations = JSON.parse(localStorage.getItem('chat_v2_history')) || {};
+    let currentChatId = localStorage.getItem('chat_v2_current_id') || '';
+    
+    // Load existing API Key if saved
+    document.getElementById('apiKey').value = localStorage.getItem('chat_v2_key') || '';
+
+    function saveApiKey() {
+      localStorage.setItem('chat_v2_key', document.getElementById('apiKey').value.trim());
+    }
+
+    // Auto-resize textarea box dynamically
+    const tx = document.getElementById('userInput');
+    tx.addEventListener("input", function() {
+      this.style.height = "auto";
+      this.style.height = (this.scrollHeight) + "px";
+    });
+
+    function handleKeyPress(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    }
+
+    // Render structural state updates
+    function renderSidebar() {
+      const list = document.getElementById('historyList');
+      list.innerHTML = '';
+      
+      // Sort keys to show newest chats first
+      const sortedIds = Object.keys(conversations).sort((a, b) => b - a);
+      
+      sortedIds.forEach(id => {
+        const item = document.createElement('div');
+        item.className = `history-item ${id === currentChatId ? 'active' : ''}`;
+        item.textContent = conversations[id].title || 'Empty Chat';
+        item.onclick = () => switchChat(id);
+        list.appendChild(item);
+      });
+    }
+
+    function renderMessages() {
+      const display = document.getElementById('chatDisplay');
+      display.innerHTML = '';
+      
+      if (!currentChatId || !conversations[currentChatId]) {
+        display.innerHTML = '<div style="text-align:center; margin-top:20vh; color:#8e8ea0; font-size:24px; font-weight:600;">ChatGPT</div>';
+        return;
+      }
+
+      conversations[currentChatId].messages.forEach(msg => {
+        const row = document.createElement('div');
+        row.className = `message-row ${msg.role === 'user' ? 'user' : 'ai'}`;
+        
+        row.innerHTML = `
+          <div class="message-content ${msg.role}">
+            <div class="avatar">${msg.role === 'user' ? 'U' : 'AI'}</div>
+            <div class="text"></div>
+          </div>
+        `;
+        row.querySelector('.text').textContent = msg.text;
+        display.appendChild(row);
+      });
+      display.scrollTop = display.scrollHeight;
+    }
+
+    function createNewChat() {
+      const id = Date.now().toString();
+      conversations[id] = {
+        title: 'New chat',
+        messages: []
+      };
+      currentChatId = id;
+      saveState();
+      renderSidebar();
+      renderMessages();
+    }
+
+    function switchChat(id) {
+      currentChatId = id;
+      localStorage.setItem('chat_v2_current_id', id);
+      renderSidebar();
+      renderMessages();
+    }
+
+    function saveState() {
+      localStorage.setItem('chat_v2_history', JSON.stringify(conversations));
+      localStorage.setItem('chat_v2_current_id', currentChatId);
+    }
+
+    // Connect to underlying core OpenAI API Engine
+    async function sendMessage() {
+      const input = document.getElementById('userInput');
+      const text = input.value.trim();
+      const apiKey = document.getElementById('apiKey').value.trim();
+      const sendBtn = document.getElementById('sendBtn');
+
+      if (!text) return;
+      if (!apiKey) {
+        alert('Please enter your OpenAI API key in the sidebar configuration first!');
+        return;
+      }
+
+      // Initialize a new chat context automatically if blank
+      if (!currentChatId || !conversations[currentChatId]) {
+        const id = Date.now().toString();
+        conversations[id] = { title: text.substring(0, 30), messages: [] };
+        currentChatId = id;
+      }
+
+      // Update current conversation thread title on first message
+      if (conversations[currentChatId].messages.length === 0) {
+        conversations[currentChatId].title = text.substring(0, 24) + (text.length > 24 ? '...' : '');
+      }
+
+      // Append user instruction node
+      conversations[currentChatId].messages.push({ role: 'user', text: text });
+      input.value = '';
+      input.style.height = "auto";
+      
+      // Temporary placeholder state
+      conversations[currentChatId].messages.push({ role: 'ai', text: 'Thinking...' });
+      saveState();
+      renderSidebar();
+      renderMessages();
+      
+      sendBtn.disabled = true;
+
+      // Map chat state history array into OpenAI's payload format
+      // Maps roles ('ai' -> 'assistant') so ChatGPT understands context
+      const payloadMessages = conversations[currentChatId].messages.slice(0, -1).map(msg => ({
+        role: msg.role === 'ai' ? 'assistant' : 'user',
+        content: msg.text
+      }));
+
+      try {
+        const response = await fetch('https://openai.com', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o-mini', // Lightweight, highly accurate, and affordable model choice
+            messages: payloadMessages
+          })
+        });
+
+        const data = await response.json();
+        // Evict structural tracking placeholder
+        conversations[currentChatId].messages.pop(); 
+
+        if (data.choices && data.choices[0] && data.choices[0].message) {
+          const aiResponse = data.choices[0].message.content;
+          conversations[currentChatId].messages.push({ role: 'ai', text: aiResponse });
+        } else if (data.error) {
+          conversations[currentChatId].messages.push({ role: 'ai', text: 'API Error: ' + data.error.message });
+        } else {
+          conversations[currentChatId].messages.push({ role: 'ai', text: 'Error processing generation schema. Inspect key validation.' });
+        }
+      } catch (error) {
+        conversations[currentChatId].messages.pop();
+        conversations[currentChatId].messages.push({ role: 'ai', text: 'Failed to complete core gateway handshake request.' });
+        console.error(error);
+      } finally {
+        sendBtn.disabled = false;
+        saveState();
+        renderMessages();
+      }
+    }
+
+    // Startup system initialization pipeline
+    renderSidebar();
+    renderMessages();
